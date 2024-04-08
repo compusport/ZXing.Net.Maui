@@ -2,8 +2,8 @@
 
 	<PropertyGroup>
 		<!-- iOS, Android, MacCatalyst -->
-		<TargetFrameworks>net7.0-android;net7.0-ios;net7.0-maccatalyst</TargetFrameworks>
-		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net7.0-windows10.0.19041</TargetFrameworks>
+		<TargetFrameworks>net8.0-android;net8.0-ios;net8.0-maccatalyst</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net8.0-windows10.0.19041</TargetFrameworks>
 		<OutputType>Exe</OutputType>
 		<SingleProject>true</SingleProject>
 		<UseMaui>true</UseMaui>
@@ -30,8 +30,13 @@
 
 	</PropertyGroup>
 
-	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net7.0-ios|AnyCPU'">
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net8.0-ios|AnyCPU'">
 	  <CreatePackage>false</CreatePackage>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(TargetFramework)'=='net8.0-ios'">
+	  <CodesignKey>Apple Development: Created via API (7PZCAU4C7Q)</CodesignKey>
+	  <CodesignProvision>VS: WildCard Development</CodesignProvision>
 	</PropertyGroup>
 	<ItemGroup>
 		<!-- App Icon -->
