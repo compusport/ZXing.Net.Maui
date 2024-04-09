@@ -133,9 +133,9 @@ namespace ZXing.Net.Maui
 
 				captureSession.AddInput(captureInput);
 
-				captureSession.StartRunning();
-			}
-		}
+                captureSession.StartRunning();
+            }
+        }
 
 
 		public void Disconnect()
@@ -230,12 +230,18 @@ namespace ZXing.Net.Maui
 			if (captureDevice.IsFocusModeSupported(AVCaptureFocusMode.ContinuousAutoFocus))
 				focusMode = AVCaptureFocusMode.ContinuousAutoFocus;
 
-			CaptureDevicePerformWithLockedConfiguration(() =>
+
+            CaptureDevicePerformWithLockedConfiguration(() =>
 			{
 				if (captureDevice.FocusPointOfInterestSupported)
 					captureDevice.FocusPointOfInterest = CoreGraphics.CGPoint.Empty;
 				captureDevice.FocusMode = focusMode;
-			});
+                // FIXME: Coud not fix auto focus problem.
+                if (captureDevice.AutoFocusRangeRestrictionSupported)
+                {
+                    captureDevice.AutoFocusRangeRestriction = AVCaptureAutoFocusRangeRestriction.Near;
+                }
+            });
 		}
 
 		public void Dispose()
