@@ -14,9 +14,11 @@ namespace BigIslandBarcode
 
 			barcodeView.Options = new BarcodeReaderOptions
 			{
-				Formats = BarcodeFormats.All,
-				AutoRotate = true,
-				Multiple = true
+				Formats = BarcodeFormat.QrCode,
+				AutoRotate = false,
+				Multiple = false,
+				TryInverted = true,
+				TryHarder = true
 			};
 		}
 
