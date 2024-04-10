@@ -66,6 +66,7 @@ namespace ZXing.Net.Maui
 				imageAnalyzer = new ImageAnalysis.Builder()
 					.SetDefaultResolution(new Android.Util.Size(640, 480))
 					//.SetOutputImageRotationEnabled(true) // FIXED: Could not read QRCode.
+					.SetOutputImageFormat(ImageAnalysis.OutputImageFormatRgba8888)
 					.SetBackpressureStrategy(ImageAnalysis.StrategyKeepOnlyLatest)
 					.Build();
 
