@@ -1,14 +1,5 @@
 ﻿using System;
-using Android.Content;
 using Android.Graphics;
-using Android.Hardware.Camera2;
-using Android.Hardware.Camera2.Params;
-using Android.Media;
-using Android.Nfc;
-using Android.OS;
-using Android.Renderscripts;
-using Android.Runtime;
-using Android.Util;
 using Android.Views;
 using AndroidX.Camera.Core;
 using AndroidX.Camera.Lifecycle;
@@ -16,20 +7,11 @@ using AndroidX.Camera.View;
 using AndroidX.Core.Content;
 using Java.Util;
 using Java.Util.Concurrent;
-using Microsoft.Maui;
-using Microsoft.Maui.Handlers;
-using Microsoft.Extensions.DependencyInjection;
-using static Android.Hardware.Camera;
-using static Android.Provider.Telephony;
-using static Java.Util.Concurrent.Flow;
-using AView = Android.Views.View;
-using Android.Hardware;
-using static Android.Graphics.Paint;
-using AndroidX.Camera.Camera2.InterOp;
+using AndroidX.Lifecycle;  // LiveDataの取得に必要
 
 namespace ZXing.Net.Maui
 {
-	internal partial class CameraManager
+    internal partial class CameraManager
 	{
 		AndroidX.Camera.Core.Preview cameraPreview;
 		ImageAnalysis imageAnalyzer;
@@ -77,7 +59,11 @@ namespace ZXing.Net.Maui
 
 				AutoFocus();
 				setupAutoFocusTimer();
-				((View)previewView.Parent).SetOnTouchListener(new TapFocusTouchListener(this));
+
+				if (previewView.Parent is View)
+				{
+                    ((View)previewView.Parent).SetOnTouchListener(new TapFocusTouchListener(this));
+                }
 
 
             }), ContextCompat.GetMainExecutor(Context.Context)); //GetMainExecutor: returns an Executor that runs on the main thread.
@@ -86,14 +72,16 @@ namespace ZXing.Net.Maui
 		private class TapFocusTouchListener : Java.Lang.Object, View.IOnTouchListener {
 
             private CameraManager cameraManager;
-
+            private ScaleGestureDetector scaleGestureDetector;
             public TapFocusTouchListener(CameraManager cameraManager)
             {
                 this.cameraManager = cameraManager;
+                // scaleGestureDetector = new ScaleGestureDetector(cameraManager.previewView.Context, new SimpleScaleListener(cameraManager));
             }
 
             public bool OnTouch(View v, MotionEvent e)
             {
+                // scaleGestureDetector.OnTouchEvent(e);
 
                 if (e.Action == MotionEventActions.Down)
                 {
@@ -104,8 +92,47 @@ namespace ZXing.Net.Maui
                 return false;
             }
         }
+        // スケールジェスチャのリスナークラス
+        private class SimpleScaleListener : ScaleGestureDetector.SimpleOnScaleGestureListener
+        {
+            private CameraManager cameraManager;
+            private float currentZoom = 1f;
 
-		private void setupAutoFocusTimer()
+            public SimpleScaleListener(CameraManager cameraManager)
+            {
+                this.cameraManager = cameraManager;
+            }
+
+            public float MaxZoomFactor
+            {
+                get
+                {
+                    if (cameraManager.camera != null)
+                        return (cameraManager.camera.CameraInfo.ZoomState.Value as IZoomState).MaxZoomRatio;
+                    else
+                        return 1f;
+                }
+            }
+
+            public override bool OnScale(ScaleGestureDetector detector)
+            {
+                float scaleFactor = detector.ScaleFactor;
+                currentZoom *= scaleFactor;
+                currentZoom = Math.Max(1f, Math.Min(currentZoom, MaxZoomFactor)); // ズーム範囲を制限
+                UpdateCameraZoom(currentZoom);
+                return true;
+            }
+
+            // カメラのズームを更新
+            private void UpdateCameraZoom(float zoom)
+            {
+                var cameraControl = cameraManager.camera.CameraControl;
+                var linearZoom = (zoom - 1) / (MaxZoomFactor - 1);
+                cameraControl.SetLinearZoom(linearZoom);
+            }
+        }
+
+        private void setupAutoFocusTimer()
         {
 			if(timer != null)
             {
@@ -208,5 +235,5 @@ namespace ZXing.Net.Maui
 			cameraExecutor?.Shutdown();
 			cameraExecutor?.Dispose();
 		}
-	}
+    }
 }
