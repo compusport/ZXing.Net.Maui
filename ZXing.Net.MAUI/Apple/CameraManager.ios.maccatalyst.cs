@@ -10,6 +10,7 @@ using UIKit;
 using Microsoft.Maui;
 using MSize = Microsoft.Maui.Graphics.Size;
 using CoreAnimation;
+using CoreGraphics;
 
 namespace ZXing.Net.Maui
 {
@@ -19,6 +20,7 @@ namespace ZXing.Net.Maui
 		AVCaptureDevice captureDevice;
 		AVCaptureInput captureInput = null;
 		PreviewView view;
+		CGPoint focusPoint = new(0, 0);
 		AVCaptureVideoDataOutput videoDataOutput;
 		AVCaptureVideoPreviewLayer videoPreviewLayer;
 		CaptureDelegate captureDelegate;
@@ -45,7 +47,69 @@ namespace ZXing.Net.Maui
 
 			view = new PreviewView(videoPreviewLayer);
 
-			return view;
+			// ピンチすると拡大縮小
+            var pinchGesture = new UIPinchGestureRecognizer((gesture) =>
+            {
+                if (gesture.State == UIGestureRecognizerState.Changed)
+                {
+                    var newZoomFactor = captureDevice.VideoZoomFactor * (nfloat)gesture.Scale;
+                    newZoomFactor = Math.Max(1.0f, Math.Min((float)newZoomFactor, (float)captureDevice.ActiveFormat.VideoMaxZoomFactor));
+
+
+                    CaptureDevicePerformWithLockedConfiguration(() =>
+                    {
+						captureDevice.VideoZoomFactor = (nfloat)newZoomFactor;
+
+                        if (captureDevice.IsFocusModeSupported(AVCaptureFocusMode.AutoFocus))
+                        {
+                            captureDevice.FocusMode = AVCaptureFocusMode.AutoFocus;
+                        }
+                    });
+
+                    gesture.Scale = 1;
+                }
+            });
+			view.AddGestureRecognizer(pinchGesture);
+
+			// タップするとフォーカス調整
+			var tapGesture = new UITapGestureRecognizer((gesture) =>
+			{
+                var newZoomFactor = captureDevice.VideoZoomFactor * 1.5f;
+                newZoomFactor = Math.Max(1.0f, Math.Min((float)newZoomFactor, (float)captureDevice.ActiveFormat.VideoMaxZoomFactor));
+                
+				var location = gesture.LocationInView(view);
+				var focusPoint = new CGPoint(location.X / view.Bounds.Width, location.Y / view.Bounds.Height);
+
+				//var label = new UILabel();
+				//label.Frame = new CGRect(location.X - 50, location.Y - 10, 100, 20);
+				//label.TextAlignment = UITextAlignment.Center;
+				//label.Text = "🔍";
+				//label.BackgroundColor = UIColor.Yellow;
+				//label.Layer.CornerRadius = 5;
+				//label.ClipsToBounds = true;
+				//view.AddSubview(label);
+
+                CaptureDevicePerformWithLockedConfiguration(() =>
+                {
+                    captureDevice.VideoZoomFactor = (nfloat)newZoomFactor;
+
+                    if (captureDevice.IsFocusModeSupported(AVCaptureFocusMode.AutoFocus))
+                    {
+						captureDevice.FocusPointOfInterest = focusPoint;
+                        captureDevice.FocusMode = AVCaptureFocusMode.AutoFocus;
+                    }
+					if (captureDevice.IsExposureModeSupported(AVCaptureExposureMode.AutoExpose))
+					{
+						captureDevice.ExposurePointOfInterest = focusPoint;
+						captureDevice.ExposureMode = AVCaptureExposureMode.AutoExpose;
+					}
+                });
+
+            });
+			view.AddGestureRecognizer(tapGesture);
+
+
+            return view;
 		}
 
 		public void Connect()
@@ -134,6 +198,7 @@ namespace ZXing.Net.Maui
 				captureSession.AddInput(captureInput);
 
                 captureSession.StartRunning();
+
             }
         }
 
@@ -261,7 +326,10 @@ namespace ZXing.Net.Maui
 
 		public readonly AVCaptureVideoPreviewLayer PreviewLayer;
 
-		public override void LayoutSubviews()
+		private AVCaptureDevice captureDevice;
+
+
+        public override void LayoutSubviews()
 		{
 			base.LayoutSubviews();
 			CATransform3D transform = CATransform3D.MakeRotation(0, 0, 0, 1.0f);
@@ -284,6 +352,6 @@ namespace ZXing.Net.Maui
 			PreviewLayer.Transform = transform;
 			PreviewLayer.Frame = Layer.Bounds;
 		}
-    }
+	}
 }
 #endif
