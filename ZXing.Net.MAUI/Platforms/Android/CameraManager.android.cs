@@ -7,7 +7,6 @@ using AndroidX.Camera.View;
 using AndroidX.Core.Content;
 using Java.Util;
 using Java.Util.Concurrent;
-using AndroidX.Lifecycle;  // LiveDataの取得に必要
 
 namespace ZXing.Net.Maui
 {
@@ -31,79 +30,72 @@ namespace ZXing.Net.Maui
 			return previewView;
 		}
 
-		public void Connect()
-		{
-			var cameraProviderFuture = ProcessCameraProvider.GetInstance(Context.Context);
+        public void Connect()
+        {
+            var cameraProviderFuture = ProcessCameraProvider.GetInstance(Context.Context);
 
-			cameraProviderFuture.AddListener(new Java.Lang.Runnable(() =>
-			{
-				// Used to bind the lifecycle of cameras to the lifecycle owner
-				cameraProvider = (ProcessCameraProvider)cameraProviderFuture.Get();
+            cameraProviderFuture.AddListener(new Java.Lang.Runnable(() =>
+            {
+                // Used to bind the lifecycle of cameras to the lifecycle owner
+                cameraProvider = (ProcessCameraProvider)cameraProviderFuture.Get();
 
-				// Preview
-				cameraPreview = new AndroidX.Camera.Core.Preview.Builder().Build();
-				cameraPreview.SetSurfaceProvider(previewView.SurfaceProvider);
+                // Preview
+                cameraPreview = new AndroidX.Camera.Core.Preview.Builder().Build();
+                cameraPreview.SetSurfaceProvider(previewView.SurfaceProvider);
 
-				// Frame by frame analyze
-				imageAnalyzer = new ImageAnalysis.Builder()
-					.SetDefaultResolution(new Android.Util.Size(640, 480))
-					//.SetOutputImageRotationEnabled(true) // FIXED: Could not read QRCode.
-					.SetOutputImageFormat(ImageAnalysis.OutputImageFormatRgba8888)
-					.SetBackpressureStrategy(ImageAnalysis.StrategyKeepOnlyLatest)
-					.Build();
+                // Frame by frame analyze
+                imageAnalyzer = new ImageAnalysis.Builder()
+                    .SetDefaultResolution(new Android.Util.Size(640, 480))
+                    //.SetOutputImageRotationEnabled(true) // FIXED: Could not read QRCode.
+                    .SetOutputImageFormat(ImageAnalysis.OutputImageFormatRgba8888)
+                    .SetBackpressureStrategy(ImageAnalysis.StrategyKeepOnlyLatest)
+                    .Build();
 
-				imageAnalyzer.SetAnalyzer(cameraExecutor, new FrameAnalyzer((buffer, size) =>
-					FrameReady?.Invoke(this, new CameraFrameBufferEventArgs(new Readers.PixelBufferHolder { Data = buffer, Size = size }))));
+                imageAnalyzer.SetAnalyzer(cameraExecutor, new FrameAnalyzer((buffer, size) =>
+                    FrameReady?.Invoke(this, new CameraFrameBufferEventArgs(new Readers.PixelBufferHolder { Data = buffer, Size = size }))));
 
-				UpdateCamera();
+                UpdateCamera();
 
-				AutoFocus();
-				setupAutoFocusTimer();
+                // Set up AutoFocus timer
+                setupAutoFocusTimer();
 
-				if (previewView.Parent is View)
-				{
-                    ((View)previewView.Parent).SetOnTouchListener(new TapFocusTouchListener(this));
+                // Inside the Connect() method
+                if (previewView.Parent is View)
+                {
+                    ((View)previewView.Parent).SetOnTouchListener(new TapAndPinchTouchListener(this));
                 }
 
-
             }), ContextCompat.GetMainExecutor(Context.Context)); //GetMainExecutor: returns an Executor that runs on the main thread.
-		}
-
-		private class TapFocusTouchListener : Java.Lang.Object, View.IOnTouchListener {
-
+        }
+        private class TapAndPinchTouchListener : Java.Lang.Object, View.IOnTouchListener, ScaleGestureDetector.IOnScaleGestureListener
+        {
             private CameraManager cameraManager;
             private ScaleGestureDetector scaleGestureDetector;
-            public TapFocusTouchListener(CameraManager cameraManager)
+            private float currentZoom = 1f;
+
+            public TapAndPinchTouchListener(CameraManager cameraManager)
             {
                 this.cameraManager = cameraManager;
-                // scaleGestureDetector = new ScaleGestureDetector(cameraManager.previewView.Context, new SimpleScaleListener(cameraManager));
+                scaleGestureDetector = new ScaleGestureDetector(cameraManager.previewView.Context, this);
+                UpdateCameraZoom(currentZoom);
             }
 
             public bool OnTouch(View v, MotionEvent e)
             {
-                // scaleGestureDetector.OnTouchEvent(e);
+                // System.Console.WriteLine("OnTouch: " + e.Action);
+
+                scaleGestureDetector.OnTouchEvent(e);
 
                 if (e.Action == MotionEventActions.Down)
                 {
-					Point point = new Point(((int)e.GetX()), ((int)e.GetY()));
-					cameraManager.Focus(point);
+                    Point point = new Point((int)e.GetX(), (int)e.GetY());
+                    cameraManager.Focus(point);
                     return true;
                 }
                 return false;
             }
-        }
-        // スケールジェスチャのリスナークラス
-        private class SimpleScaleListener : ScaleGestureDetector.SimpleOnScaleGestureListener
-        {
-            private CameraManager cameraManager;
-            private float currentZoom = 1f;
 
-            public SimpleScaleListener(CameraManager cameraManager)
-            {
-                this.cameraManager = cameraManager;
-            }
-
-            public float MaxZoomFactor
+            private float MaxZoomFactor
             {
                 get
                 {
@@ -113,19 +105,35 @@ namespace ZXing.Net.Maui
                         return 1f;
                 }
             }
-
-            public override bool OnScale(ScaleGestureDetector detector)
+            public bool OnScale(ScaleGestureDetector detector)
             {
+                // System.Console.WriteLine("OnScale: " + detector.ScaleFactor);
                 float scaleFactor = detector.ScaleFactor;
+
                 currentZoom *= scaleFactor;
-                currentZoom = Math.Max(1f, Math.Min(currentZoom, MaxZoomFactor)); // ズーム範囲を制限
+                currentZoom = Math.Max(1f, Math.Min(currentZoom, MaxZoomFactor)); // Limit the zoom range
                 UpdateCameraZoom(currentZoom);
                 return true;
             }
 
-            // カメラのズームを更新
+            public bool OnScaleBegin(ScaleGestureDetector detector)
+            {
+                // Return true to allow scaling gesture to begin
+                return true;
+            }
+
+            public void OnScaleEnd(ScaleGestureDetector detector)
+            {
+                // Handle any necessary cleanup or finalization after scaling gesture ends
+            }
+            // Update the camera zoom
             private void UpdateCameraZoom(float zoom)
             {
+                //var zoomState = cameraManager.camera.CameraInfo.ZoomState.Value as IZoomState;
+                //var currentZoomRatio = zoomState.ZoomRatio;
+                //System.Console.WriteLine($"currentZoom = {currentZoom}, currentZoomRatio: {currentZoomRatio}, zoom = {zoom}, MaxZoomFactor = {MaxZoomFactor}");
+
+
                 var cameraControl = cameraManager.camera.CameraControl;
                 var linearZoom = (zoom - 1) / (MaxZoomFactor - 1);
                 cameraControl.SetLinearZoom(linearZoom);
