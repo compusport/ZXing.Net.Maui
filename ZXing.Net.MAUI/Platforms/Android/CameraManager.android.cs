@@ -25,6 +25,8 @@ namespace ZXing.Net.Maui
 		public NativePlatformCameraPreviewView CreateNativeView()
 		{
 			previewView = new PreviewView(Context.Context);
+            // Maui Bug: https://github.com/Redth/ZXing.Net.Maui/issues/191
+            previewView.SetScaleType(PreviewView.ScaleType.FitCenter);
             cameraExecutor = Executors.NewSingleThreadExecutor();
 
 			return previewView;
